@@ -19,22 +19,23 @@ class Block:
         return self.block
 
     def __xor__(self, other):
-        if self.bit_size != other.bit_size:
-            raise ValueError("Blocks must have the same bit size!")
         value = int(self.block, 2) ^ int(other.block, 2)
         binary_string = bin(value)[2:].zfill(self.bit_size)
         return Block(binary_string, is_binary_string=True)
 
     def __getitem__(self, index):
+        if isinstance(index, slice):
+            start, stop, step = index.start, index.stop, index.step
+            return Block(self.block[start:stop:step], is_binary_string=True)
         return self.block[index]
 
     def __lshift__(self, n):
-        return Block(self.block[n:] + self.block[:n], is_binary_string=True)
+        return self[n:] + self[:n]
 
     def __add__(self, other):
         return Block(self.block + other.block, is_binary_string=True)
 
-    def bytes(self) -> bytes:
+    def __bytes__(self):
         return int(self.block, 2).to_bytes(self.bit_size // 8, byteorder='big')
 
     def map_with_table(self, table: list[int]) -> 'Block':
@@ -63,14 +64,14 @@ class MyDES:
             L, R = R, L ^ MyDES.f(R, round_key_block)
         L, R = R, L
         data_block = MyDES.IP_inverse(L + R)
-        return data_block.bytes()
+        return bytes(data_block)
 
     @staticmethod
     def PC1(block: Block) -> tuple[Block, Block]:
         table = [57, 49, 41, 33, 25, 17, 9, 1, 58, 50, 42, 34, 26, 18, 10, 2, 59, 51, 43, 35, 27, 19, 11, 3, 60, 52, 44, 36, 63, 55, 47, 39, 31, 23, 15, 7, 62, 54, 46, 38, 30, 22, 14, 6, 61, 53, 45, 37, 29, 21, 13, 5, 28, 20, 12, 4]
         block = block.map_with_table(table)
         half_block_size = block.bit_size // 2
-        return Block(block[:half_block_size], is_binary_string=True), Block(block[half_block_size:], is_binary_string=True)
+        return block[:half_block_size], block[half_block_size:]
 
     @staticmethod
     def PC2(block: Block) -> Block:
@@ -90,7 +91,7 @@ class MyDES:
         table = [58, 50, 42, 34, 26, 18, 10, 2, 60, 52, 44, 36, 28, 20, 12, 4, 62, 54, 46, 38, 30, 22, 14, 6, 64, 56, 48, 40, 32, 24, 16, 8, 57, 49, 41, 33, 25, 17, 9, 1, 59, 51, 43, 35, 27, 19, 11, 3, 61, 53, 45, 37, 29, 21, 13, 5, 63, 55, 47, 39, 31, 23, 15, 7]
         block = block.map_with_table(table)
         half_block_size = block.bit_size // 2
-        return Block(block[:half_block_size], is_binary_string=True), Block(block[half_block_size:], is_binary_string=True)
+        return block[:half_block_size], block[half_block_size:]
 
     @staticmethod
     def E(block: Block) -> Block:
@@ -110,10 +111,10 @@ class MyDES:
             [13, 2, 8, 4, 6, 15, 11, 1, 10, 9, 3, 14, 5, 0, 12, 7, 1, 15, 13, 8, 10, 3, 7, 4, 12, 5, 6, 11, 0, 14, 9, 2, 7, 11, 4, 1, 9, 12, 14, 2, 0, 6, 10, 13, 15, 3, 5, 8, 2, 1, 14, 7, 4, 10, 8, 13, 15, 12, 9, 0, 3, 5, 6, 11],
         ]
         row_col_pairs = map(lambda batch: (int(batch[0] + batch[-1], 2), int(''.join(batch[1:-1]), 2)), batched(block, 6))
-        output_indexes = map(lambda row_col_pair: row_col_pair[0] * 16 + row_col_pair[1], row_col_pairs)
-        output_values = map(lambda table_output_index_pair: tables[table_output_index_pair[0]][table_output_index_pair[1]], enumerate(output_indexes))
-        output_string = ''.join(map(lambda x: bin(x)[2:].zfill(4), output_values))
-        return Block(output_string, is_binary_string=True)
+        indexes = map(lambda row_col_pair: row_col_pair[0] * 16 + row_col_pair[1], row_col_pairs)
+        values = map(lambda table_output_index_pair: tables[table_output_index_pair[0]][table_output_index_pair[1]], enumerate(indexes))
+        binary_string = ''.join(map(lambda x: bin(x)[2:].zfill(4), values))
+        return Block(binary_string, is_binary_string=True)
 
     @staticmethod
     def P(block: Block) -> Block:
